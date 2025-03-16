@@ -1,0 +1,170 @@
+---
+title: "Proposed GEE"
+subtitle: "Department of Biostatistics @ University of Washington"
+author:
+- Alejandro Hernandez
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+
+```{r setup, include=F}
+# clear environment
+rm(list=ls())
+# setup options
+knitr::opts_chunk$set(results='hide', warning=FALSE, message=FALSE)
+options(knitr.kable.NA = '-', digits = 2)
+```
+
+```{r load-libraries-data}
+# load relevant packages
+library(dplyr)      # data manipulation
+library(ggplot2)    # data visualization
+library(broom)      # tidy tables
+library(gee)        # GEE
+library(geepack)    # GEE package
+library(ggeffects)  # tidy GEE tables
+library(emmeans)    # marginal effects
+
+# load data
+phis_labelled <- read.csv("../data/mh_subs_1kextract_uw.csv")
+dim(phis_labelled)
+```
+
+```{r feature-engineering}
+# this will be put into a separate script later
+
+## FEATURE ENGINEERING
+library(lubridate)
+phis <- phis_labelled %>%
+  mutate(mh_any = ifelse(MH_ANY == "One or more", 1, 0),
+         admit_year = lubridate::year(lubridate::ymd(ADMIT_DATE)),
+         discharge_year = year(ymd(DISCHARGE_DATE))) %>%
+  rename(sex = HOSP_RECORDED_SEX,
+         length_stay = LENGTH_OF_STAY_DAYS,
+         race = RACE_ETHNICITY,
+         age = AGE_YRS,
+         polysub = POLYSUBSTANCE) %>%
+  filter(sex != "Unknown",
+         race != "Unknown")
+
+## COERCE VARAIBLES TO APPROPRITATE DATA TYPE
+# phis$mh_any <- as.factor(phis$mh_any)
+# phis$alc <- as.factor(phis$alc)
+phis$HOSPITAL <- as.factor(phis$HOSPITAL)
+phis$race <- as.factor(phis$race)
+phis$sex <- as.factor(phis$sex)
+phis$admit_year <- as.numeric(phis$admit_year)
+
+## DATA CLEANING
+phis <- na.omit(phis)
+phis <- phis %>% subset(sex != "Unknown")
+levels(phis$sex)
+
+# count number of differing admission/discharge dates that are not above 0 or NA
+phis %>% mutate(discharge_year - admit_year, .keep = "none") %>% subset(. != 0)
+
+## DATA SUBSET
+anyNA(phis)
+phis <- phis %>% select(c(mh_any, alc, mar, opi, stim, hal, benz, nic, oth, polysub,
+                          admit_year, HOSPITAL, selfharm, length_stay,
+                          sex, race, age))
+
+head(phis)
+```
+
+```{r}
+summary(phis)
+sapply(phis[c("mh_any", "alc", "admit_year", "sex", "HOSPITAL")], function(x) sum(is.na(x)))
+
+```
+
+
+```{r}
+#### --- GEEPACK --- ####
+# Model proportions of patients with any mental health condition
+# by alcohol-related visits, sex, and year of admission
+formula <- mh_any ~ alc*admit_year + mar*admit_year
+mhany_gee <- geepack::geeglm(formula, data = phis, id = HOSPITAL,
+                             family = binomial, corstr = "exchangeable")
+
+mhany_gee %>% broom::tidy(exponentiat=TRUE, conf.int=TRUE)
+```
+
+Why is the effect of an alcohol-related diagnosis so large? One reason may be that for some strata of admission year and sex, the proport
+
+```{r}
+phis %>% 
+  group_by(admit_year) %>% 
+  mutate(sex = ifelse(sex=="Male", 1, 0)) %>%
+  summarize(prop_male = mean(sex))
+```
+
+
+```{r}
+# Plot marginal effects of an alcohol-related diagnosis on the proportion of 
+# patients with any mental health condition over time, by sex
+male_margeff <- ggeffects::ggemmeans(mhany_gee,
+                                     terms = c("admit_year", "alc"),
+                                     condition = c(sex = "Male"))
+female_margeff <- ggemmeans(mhany_gee,
+                            terms = c("admit_year", "alc"),
+                            condition = c(sex = "Female"))
+
+plot(male_margeff) + ggplot2::ggtitle("GEE Effect plot for males") + ylim(0,1)
+plot(female_margeff) + ggtitle("GEE Effect plot for females") + ylim(0,1)
+```
+
+
+
+
+```{r}
+#### --- GEE --- ####
+mhany_gee <- gee::gee(mh_any ~ alc * admit_year,
+                      data = phis,
+                      id = HOSPITAL,
+                      family = binomial,
+                      corstr = "exchangeable")
+coef(summary(mhany_gee))
+marginal_effects <- ggeffects::ggemmeans(mhany_gee,
+                                         terms = c("admit_year", "alc")) #,
+                                         # condition = c(diagnose = "severe"))
+plot(marginal_effects) + ggplot2::ggtitle("GEE Effect plot")
+```
+
+
+```{r}
+# model proportion of mental health diagnosis
+mod <- mh_any ~ polysub + race + sex + age
+fit1 <- geepack::geeglm(mod, data=phis, id=HOSPITAL, family=binomial, corstr="exchangeable")
+fit2 <- update(fit1, . ~ . + admit_year)
+fit3 <- update(fit2, . ~ . + alc)
+fit4 <- update(fit3, . ~ . + alc:admit_year)
+
+fit4 %>% broom::tidy(exponentiat=TRUE, conf.int=TRUE) %>% View()
+
+# test
+anova(fit2, fit4, test="wald")
+anova(fit4, test="wald")
+
+# plot estimates of marginal association
+marginal_effects <- ggeffects::ggemmeans(mhany_gee,
+                                         terms = c("admit_year", "polysub"),
+                                         condition = "alc==1")
+
+marginal_effects
+plot(marginal_effects) + ggplot2::ggtitle("GEE Effect plot among alcohol-related encounters")
+```
+
+
+
+**End of report. Code appendix begins on the next page.**
+
+\pagebreak
+
+## Code Appendix
+
+```{r allcode, ref.label = knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
+
+**End of document.**

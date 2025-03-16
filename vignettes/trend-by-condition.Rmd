@@ -1,0 +1,663 @@
+---
+title: "Trends of comorbid mental health conditions, 2019-2021"
+subtitle: "Seattle Children's Hospital Capstone Group"
+author:
+- Alejandro Hernandez
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=F}
+# clear environment
+rm(list=ls())
+# setup options
+knitr::opts_chunk$set(results='hide', warning=FALSE, message=FALSE)
+options(knitr.kable.NA = '-', digits = 2)
+```
+
+```{r load}
+# Load relevant packages
+library(tidyverse)  # whole bunch of useful packages
+library(knitr)      # pretty print
+library(lubridate)  # date formatting
+library(ggplot2)    # data visualization
+library(ggridges)
+
+# Load relevant local scripts
+source("../R/preprocessing.R")  # Pre-processing
+source("../R/describe-data.R")  # Describing overall details of PHIS data
+source("../R/summarize-growth.R")  # Summarize and present trends
+source("../R/model-growth.R")
+source("../R/compare-growth.R")
+
+# Load data
+phis_raw <- read_csv(file = "../data/mh_subs_uw.csv")  # Ensure this is the right directory
+nrow(phis_raw)  # 106,793 rows
+names(phis_raw)
+
+# Preprocess data
+phis <- preprocessing(phis_raw)
+
+# Clip off 2021 Oct-Dec
+# phis <- phis %>% filter(!(ADMIT_YEAR==2021 & ADMIT_QTR_IDX==24))
+```
+
+## Overall (Substance-related)
+
+```{r}
+######################
+#### ALL PATIENTS ####
+######################
+
+nrow(phis)  # 106,693 rows
+
+# Describe data
+tab_all <- describe_data(phis)$subgroup_table  # Subgroups have sufficient size
+
+## Visualize and summarize trends over time
+res_all <- summarize_growth(phis)
+
+# # Plot of hospital counts
+# res_all$plots$hosp_counts_by_year
+# 
+# # Plots of percent growth
+# res_all$plots$counts_by_year + labs(title = "Substance-related visits")
+# res_all$plots$counts_by_qtr + labs(title = "Substance-related visits")
+# 
+# # Table of percent growth
+# res_all$tables$counts_by_year
+
+```
+
+## Any Mental Health
+
+```{r}
+###########################
+#### ANY MENTAL HEATLH ####
+###########################
+
+# Describe data
+tab_mh <- describe_data(phis, group_by = "MH_ANY")$subgroup_table  # Subgroups have sufficient size
+
+## Plot trends
+# Patients with condition
+res_mh <- summarize_growth(subset(phis, MH_ANY == 1))
+name1 = "Any mental health" 
+
+# Patients without condition
+res_nmh <- summarize_growth(subset(phis, MH_ANY == 0))
+name2 = "Not mental health"
+
+# Compare growths
+compare_growth(res_mh$tables, res_nmh$tables, name1, name2)
+
+```
+
+## Depressive Disorders
+
+```{r}
+#########################
+#### MENTAL HEATLH 7 ####
+#########################
+
+# Describe data
+tab_mh7 <- describe_data(phis, group_by = "mh_7")$subgroup_table  # 11 subsamples are smaller than 30
+
+## Plot trends
+# Patients with condition
+res_mh7 <- summarize_growth(subset(phis, mh_7 == 1))
+name1 = "Depressive Disorders" 
+
+# Patients without condition
+res_nmh7 <- summarize_growth(subset(phis, mh_7 == 0))
+name2 = "Not Depressive Disorders"
+
+# Compare growths
+compare_growth(res_mh7$tables, res_nmh7$tables, name1, name2)
+
+```
+
+## Suicide or Self-Injury
+
+```{r}
+##########################
+#### MENTAL HEATLH 29 ####
+##########################
+
+# Describe data
+tab_mh29 <- describe_data(phis, group_by = "mh_29")$subgroup_table  # 13 subsamples are smaller than 30
+
+## Plot trends
+# Patients with condition
+res_mh29 <- summarize_growth(subset(phis, mh_29 == 1))
+name1 = "Suicide or Self-Injury"
+
+# Patients without condition
+res_nmh29 <- summarize_growth(subset(phis, mh_29 == 0))
+name2 = "Not Suicide or Self-Injury"
+
+# Compare growths
+compare_growth(res_mh29$tables, res_nmh29$tables, name1, name2)
+```
+
+## Substance Use Disorder
+
+```{r}
+####################
+#### DEPENDENCE ####
+####################
+
+# Describe data
+tab_sud <- describe_data(phis, group_by = "dependence")$subgroup_table  # 26 subsamples are smaller than 30
+
+## Plot trends
+# Patients with condition
+res_sud <- summarize_growth(subset(phis, dependence == 1))
+name1 = "Substance Use Disorder"
+
+# Patients without condition
+res_nsud <- summarize_growth(subset(phis, dependence == 0))
+name2 = "Not Substance Use Disorder"
+
+# Compare growths
+compare_growth(res_sud$tables, res_nsud$tables, name1, name2)
+
+```
+
+## Anxiety Disorders
+
+```{r}
+##########################
+#### MENTAL HEATLH 29 ####
+##########################
+
+# Describe data
+tab_mh3 <- describe_data(phis, group_by = "mh_3")$subgroup_table  # 15 subsamples are smaller than 30
+
+## Plot trends
+# Patients with condition
+res_mh3 <- summarize_growth(subset(phis, mh_3 == 1))
+name1 = "Anxiety Disorders"
+
+# Patients without condition
+res_nmh3 <- summarize_growth(subset(phis, mh_3 == 0))
+name2 = "Not Anxiety Disorders"
+
+# Compare growths
+compare_growth(res_mh3$tables, res_nmh3$tables, name1, name2)
+
+```
+
+## ADHD
+
+```{r}
+##########################
+#### MENTAL HEATLH 2 ####
+##########################
+
+# Describe data
+tab_mh2 <- describe_data(phis, group_by = "mh_2")$subgroup_table  # 51 subsamples are smaller than 30
+
+## Plot trends
+# Patients with condition
+res_mh2 <- summarize_growth(subset(phis, mh_2 == 1))
+name1 = "ADHD"
+
+# Patients without condition
+res_nmh2 <- summarize_growth(subset(phis, mh_2 == 0))
+name2 = "Not ADHD"
+
+# Compare growths
+compare_growth(res_mh2$tables, res_nmh2$tables, name1, name2)
+
+```
+
+## Trauma and Stressor Related
+
+```{r}
+##########################
+#### MENTAL HEATLH 30 ####
+##########################
+
+# Describe data
+tab_mh30 <- describe_data(phis, group_by = "mh_30")$subgroup_table  # 99 subsamples are smaller than 30
+
+## Plot trends
+# Patients with condition
+res_mh30 <- summarize_growth(subset(phis, mh_30 == 1))
+name1 = "Trauma and Stressor Related"
+
+# Patients without condition
+res_nmh30 <- summarize_growth(subset(phis, mh_30 == 0))
+name2 = "Not Trauma and Stressor Related"
+
+# Compare growths
+compare_growth(res_mh30$tables, res_nmh30$tables, name1, name2)
+
+```
+Compare the top 6 mental health conditions within substance-related visits
+
+```{r}
+## Extract information from results
+
+# Get time values
+quarters <- res_mh7$tables$counts_by_qtr$ADMIT_QTR_IDX
+nquarters <- length(quarters)
+
+years <- res_mh7$tables$counts_by_year$ADMIT_YEAR
+nyears <- length(years)
+
+npairs <- 12
+```
+
+
+```{r}
+## Growth by quarter
+growth_qtr_mh7 = res_mh7$tables$counts_by_qtr$percentgrowth
+growth_qtr_nmh7 = res_nmh7$tables$counts_by_qtr$percentgrowth
+# 29
+growth_qtr_mh29 = res_mh29$tables$counts_by_qtr$percentgrowth
+growth_qtr_nmh29 = res_nmh29$tables$counts_by_qtr$percentgrowth
+# SUD
+growth_qtr_sud = res_sud$tables$counts_by_qtr$percentgrowth
+growth_qtr_nsud = res_nsud$tables$counts_by_qtr$percentgrowth
+# 3
+growth_qtr_mh3 = res_mh3$tables$counts_by_qtr$percentgrowth
+growth_qtr_nmh3 = res_nmh3$tables$counts_by_qtr$percentgrowth
+# 2
+growth_qtr_mh2 = res_mh2$tables$counts_by_qtr$percentgrowth
+growth_qtr_nmh2 = res_nmh2$tables$counts_by_qtr$percentgrowth
+# 30
+growth_qtr_mh30 = res_mh30$tables$counts_by_qtr$percentgrowth
+growth_qtr_nmh30 = res_nmh30$tables$counts_by_qtr$percentgrowth
+
+qtr_growths <- c(growth_qtr_mh7, growth_qtr_nmh7, 
+                  growth_qtr_mh29, growth_qtr_nmh29,
+                  growth_qtr_sud, growth_qtr_nsud,
+                  growth_qtr_mh3, growth_qtr_nmh3,
+                  growth_qtr_mh2, growth_qtr_nmh2,
+                  growth_qtr_mh30, growth_qtr_nmh30)
+
+## Counts by quarter
+count_qtr_mh7 = res_mh7$tables$counts_by_qtr$count 
+count_qtr_nmh7 = res_nmh7$tables$counts_by_qtr$count 
+# 29
+count_qtr_mh29 = res_mh29$tables$counts_by_qtr$count 
+count_qtr_nmh29 = res_nmh29$tables$counts_by_qtr$count 
+# SUD
+count_qtr_sud = res_sud$tables$counts_by_qtr$count 
+count_qtr_nsud = res_nsud$tables$counts_by_qtr$count 
+# 3
+count_qtr_mh3 = res_mh3$tables$counts_by_qtr$count 
+count_qtr_nmh3 = res_nmh3$tables$counts_by_qtr$count 
+# 2
+count_qtr_mh2 = res_mh2$tables$counts_by_qtr$count 
+count_qtr_nmh2 = res_nmh2$tables$counts_by_qtr$count 
+# 30
+count_qtr_mh30 = res_mh30$tables$counts_by_qtr$count 
+count_qtr_nmh30 = res_nmh30$tables$counts_by_qtr$count 
+
+qtr_counts <- c(count_qtr_mh7, count_qtr_nmh7, 
+                count_qtr_mh29, count_qtr_nmh29,
+                count_qtr_sud, count_qtr_nsud,
+                count_qtr_mh3, count_qtr_nmh3,
+                count_qtr_mh2, count_qtr_nmh2,
+                count_qtr_mh30, count_qtr_nmh30)
+
+dat_qtr <- data.frame(
+  times = rep(quarters, npairs),
+  count = qtr_counts,
+  growth = qtr_growths,
+  Condition = c(rep("Depressive", 2*nquarters), 
+                rep("Self-injury", 2*nquarters), 
+                rep("SUD", 2*nquarters), 
+                rep("Anxiety", 2*nquarters), 
+                rep("ADHD", 2*nquarters), 
+                rep("Trauma/Stress", 2*nquarters)),
+  Characteristic = rep(c(rep("With condition", nquarters),
+                         rep("Without condition", nquarters)), 6))
+```
+
+
+```{r}
+## Growth by year
+growth_year_mh7 = res_mh7$tables$counts_by_year$percentgrowth
+growth_year_nmh7 = res_nmh7$tables$counts_by_year$percentgrowth
+# 29
+growth_year_mh29 = res_mh29$tables$counts_by_year$percentgrowth
+growth_year_nmh29 = res_nmh29$tables$counts_by_year$percentgrowth
+# SUD
+growth_year_sud = res_sud$tables$counts_by_year$percentgrowth
+growth_year_nsud = res_nsud$tables$counts_by_year$percentgrowth
+# 3
+growth_year_mh3 = res_mh3$tables$counts_by_year$percentgrowth
+growth_year_nmh3 = res_nmh3$tables$counts_by_year$percentgrowth
+# 2
+growth_year_mh2 = res_mh2$tables$counts_by_year$percentgrowth
+growth_year_nmh2 = res_nmh2$tables$counts_by_year$percentgrowth
+# 30
+growth_year_mh30 = res_mh30$tables$counts_by_year$percentgrowth
+growth_year_nmh30 = res_nmh30$tables$counts_by_year$percentgrowth
+
+year_growths <- c(growth_year_mh7, growth_year_nmh7, 
+                  growth_year_mh29, growth_year_nmh29,
+                  growth_year_sud, growth_year_nsud,
+                  growth_year_mh3, growth_year_nmh3,
+                  growth_year_mh2, growth_year_nmh2,
+                  growth_year_mh30, growth_year_nmh30)
+
+
+## Count by year
+count_year_mh7 = res_mh7$tables$counts_by_year$count
+count_year_nmh7 = res_nmh7$tables$counts_by_year$count
+# 29
+count_year_mh29 = res_mh29$tables$counts_by_year$count
+count_year_nmh29 = res_nmh29$tables$counts_by_year$count
+# SUD
+count_year_sud = res_sud$tables$counts_by_year$count
+count_year_nsud = res_nsud$tables$counts_by_year$count
+# 3
+count_year_mh3 = res_mh3$tables$counts_by_year$count
+count_year_nmh3 = res_nmh3$tables$counts_by_year$count
+# 2
+count_year_mh2 = res_mh2$tables$counts_by_year$count
+count_year_nmh2 = res_nmh2$tables$counts_by_year$count
+# 30
+count_year_mh30 = res_mh30$tables$counts_by_year$count
+count_year_nmh30 = res_nmh30$tables$counts_by_year$count
+
+year_counts <- c(count_year_mh7, count_year_nmh7, 
+                  count_year_mh29, count_year_nmh29,
+                  count_year_sud, count_year_nsud,
+                  count_year_mh3, count_year_nmh3,
+                  count_year_mh2, count_year_nmh2,
+                  count_year_mh30, count_year_nmh30)
+
+dat_year <- data.frame(
+  times = rep(years, npairs),
+  count = year_counts,
+  growth = year_growths,
+  Condition = c(rep("Depressive", 2*nyears), 
+                rep("Self-injury", 2*nyears), 
+                rep("SUD", 2*nyears), 
+                rep("Anxiety", 2*nyears), 
+                rep("ADHD", 2*nyears), 
+                rep("Trauma/Stress", 2*nyears)),
+  Characteristic = rep(c(rep("With condition", nyears),
+                         rep("Without condition", nyears)), 6))
+```
+
+
+```{r}
+## TOP 6 CONDITIONS
+dat_qtr %>%
+  ggplot(aes(x=times, y=growth,
+             group = paste(Characteristic, Condition),
+             color = Condition,
+             alpha = Characteristic)) +
+  # Add line for onset of COVID
+  geom_vline(xintercept=18, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_line(lwd=0.8) +
+  # geom_smooth(se=FALSE) +
+  # Label axes
+  labs(x="Quarter of admission", y="Percent growth") +
+  scale_x_continuous(breaks = seq(1,24,by=4),
+                     labels = paste0(2016:2021,"-Q1")) +
+  scale_y_continuous(breaks = seq(-.2,1.6,by=0.2)) +
+  # Add legend
+  # theme(legend.position="inside", legend.position.inside=c(.15, .8)) +
+  scale_alpha_discrete(range = c(1,.1)) +
+  scale_color_manual(values=c("darkred", "brown2", "orange",
+                              "forestgreen", "deepskyblue", "darkblue")) +
+  # Modify theme
+  theme_bw()
+
+
+dat_year %>%
+  ggplot(aes(x=times, y=growth,
+             group = paste(Characteristic, Condition),
+             color = Condition,
+             alpha = Characteristic)) +
+  # Add line for onset of COVID
+  geom_vline(xintercept=2020, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_line(lwd=0.8) +
+  geom_point() +
+  # Label axes
+  labs(x="Year of admission", y="Percent growth") +
+  scale_y_continuous(breaks = seq(0,1.1,by=0.2)) +
+  # Add legend
+  scale_alpha_discrete(range = c(1,.1)) +
+  scale_color_manual(values=c("darkred", "brown2", "orange",
+                              "forestgreen", "deepskyblue", "darkblue")) +
+  # Modify theme
+  theme_bw()
+
+```
+
+```{r}
+dat_qtr %>%
+  ggplot(aes(x=times, y=count,
+             group = paste(Characteristic, Condition),
+             color = Condition,
+             alpha = Characteristic)) +
+  # Add line for onset of COVID
+  geom_vline(xintercept=18, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_line(lwd=0.8) +
+  # geom_smooth(se=FALSE) +
+  # Label axes
+  labs(x="Quarter of admission", y="Volume") +
+  scale_x_continuous(breaks = seq(1,24,by=4),
+                     labels = paste0(2016:2021,"-Q1")) +
+  # scale_y_continuous(breaks = seq(-.2,1.6,by=0.2)) +
+  # Add legend
+  scale_alpha_discrete(range = c(1,.1)) +
+  scale_color_manual(values=c("darkred", "brown2", "orange",
+                              "forestgreen", "deepskyblue", "darkblue")) +
+  # Modify theme
+  theme_bw()
+
+
+dat_year %>%
+  ggplot(aes(x=times, y=count,
+             group = paste(Characteristic, Condition),
+             color = Condition,
+             alpha = Characteristic)) +
+  # Add line for onset of COVID
+  geom_vline(xintercept=2020, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_line(lwd=0.8) +
+  geom_point() +
+  # Label axes
+  labs(x="Year of admission", y="Volume") +
+  # Add legend
+  scale_alpha_discrete(range = c(1,.1)) +
+  scale_color_manual(values=c("darkred", "brown2", "orange",
+                              "forestgreen", "deepskyblue", "darkblue")) +
+  # Modify theme
+  theme_bw()
+```
+
+```{r}
+# Any Mental Health
+ggplot(phis, aes(x=LENGTH_OF_STAY_DAYS, y=as.character(MH_ANY))) + 
+  geom_density_ridges() + xlim(0,30)
+# Depressive
+ggplot(phis, aes(x=LENGTH_OF_STAY_DAYS, y=as.character(mh_7))) + 
+  geom_density_ridges() + xlim(0,30)
+# Self-injury
+ggplot(phis, aes(x=LENGTH_OF_STAY_DAYS, y=as.character(mh_29))) + 
+  geom_density_ridges() + xlim(0,30)
+# Dependence
+ggplot(phis, aes(x=LENGTH_OF_STAY_DAYS, y=as.character(dependence))) + 
+  geom_density_ridges() + xlim(0,30)
+# Anxiety
+ggplot(phis, aes(x=LENGTH_OF_STAY_DAYS, y=as.character(mh_3))) + 
+  geom_density_ridges() + xlim(0,30)
+# ADHD
+ggplot(phis, aes(x=LENGTH_OF_STAY_DAYS, y=as.character(mh_2))) + 
+  geom_density_ridges() + xlim(0,30)
+# Trauma/Stress
+ggplot(phis, aes(x=LENGTH_OF_STAY_DAYS, y=as.character(mh_30))) + 
+  geom_density_ridges() + xlim(0,30)
+```
+
+
+```{r}
+## TOP 3 CONDITIONS
+dat_qtr %>% filter(Condition %in% c("Depressive", "Self-injury", "SUD")) %>%
+  ggplot(aes(x=times, y=growth,
+             group = paste(Characteristic, Condition),
+             color=Condition,
+             lty=Characteristic)) +
+  # Add line for onset of COVID
+  geom_vline(xintercept=18, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_line(lwd=0.8) +
+  # Label axes
+  labs(x="Quarter of admission", y="Percent growth") +
+  scale_x_continuous(breaks = seq(1,24,by=4),
+                     labels = paste0(2016:2021,"-Q1")) +
+  scale_y_continuous(breaks = seq(-.2,1.6,by=0.2)) +
+  # Add legend
+  theme(legend.position="inside", legend.position.inside=c(.15, .8)) +
+  scale_color_manual(values=c("lightblue", "darkred", "orange")) +
+  # Modify theme
+  theme_bw()
+
+
+## TOP 4-6 CONDITIONS
+dat_qtr %>% filter(! Condition %in% c("Depressive", "Self-injury", "SUD")) %>%
+  ggplot(aes(x=times, y=growth,
+             group = paste(Characteristic, Condition),
+             color=Condition,
+             lty=Characteristic)) +
+  # Add line for onset of COVID
+  geom_vline(xintercept=18, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_line(lwd=0.8) +
+  # Label axes
+  labs(x="Quarter of admission", y="Percent growth") +
+  scale_x_continuous(breaks = seq(1,24,by=4),
+                     labels = paste0(2016:2021,"-Q1")) +
+  scale_y_continuous(breaks = seq(-.2,1.6,by=0.2)) +
+  # Add legend
+  theme(legend.position="inside", legend.position.inside=c(.15, .8)) +
+  scale_color_manual(values=c("lightblue", "darkred", "orange")) +
+  # Modify theme
+  theme_bw()
+
+```
+
+
+```{r}
+## TOP 6 CONDITIONS
+dat_year %>%
+  ggplot(aes(x=times, y=growth,
+             group = paste(Characteristic, Condition),
+             color = Condition,
+             alpha = Characteristic)) +
+  # Add line for onset of COVID
+  geom_vline(xintercept=2020, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_line(lwd=0.5) +
+  geom_point() +
+  # Label axes
+  labs(x="Year of admission", y="Percent growth") +
+  scale_y_continuous(breaks = seq(0,1.1,by=0.2)) +
+  # Add legend
+  theme(legend.position="inside", legend.position.inside=c(.15, .8)) +
+  scale_alpha_discrete(range = c(1,.1)) +
+  # Modify theme
+  theme_bw()
+```
+
+
+```{r}
+## TOP 3 CONDITIONS
+dat_year %>% filter(Condition %in% c("Depressive", "Self-injury", "SUD")) %>%
+  ggplot(aes(x=times, y=growth,
+             group = paste(Characteristic, Condition),
+             color = Condition,
+             alpha = Characteristic)) +
+  # Add line for onset of COVID
+  geom_vline(xintercept=2020, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_line(lwd=0.7) +
+  geom_point() +
+  # Label axes
+  labs(x="Year of admission", y="Percent growth") +
+  scale_y_continuous(breaks = seq(0,1.1,by=0.2)) +
+  # Add legend
+  theme(legend.position="inside", legend.position.inside=c(.15, .8)) +
+  scale_alpha_discrete(range = c(1,.1)) +
+  scale_color_manual(values=c("forestgreen", "darkred", "orange")) +
+  # Modify theme
+  theme_bw()
+
+## TOP 4-6 CONDITIONS
+dat_year %>% filter(! Condition %in% c("Depressive", "Self-injury", "SUD")) %>%
+  ggplot(aes(x=times, y=growth,
+             group = paste(Characteristic, Condition),
+             color = Condition,
+             alpha = Characteristic)) +
+  # Add line for onset of COVID
+  geom_vline(xintercept=2020, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_line(lwd=0.7) +
+  geom_point() +
+  # Label axes
+  labs(x="Year of admission", y="Percent growth") +
+  scale_y_continuous(breaks = seq(0,1.1,by=0.2)) +
+  # Add legend
+  theme(legend.position="inside", legend.position.inside=c(.15, .8)) +
+  scale_alpha_discrete(range = c(1,.1)) +
+  scale_color_manual(values=c("forestgreen", "darkred", "orange")) +
+  # Modify theme
+  theme_bw()
+
+```
+
+\newpage
+
+# Table
+
+```{r}
+taball <- phis %>%
+  select(starts_with("mh_"), dependence) %>%
+  colSums %>% 
+  data.frame(count = .) %>% mutate(perc = round(count / nrow(phis), 3)) %>%
+  arrange(desc(count)) %>% head(7)
+
+phis_2016 <- phis %>% filter(ADMIT_YEAR==2016)
+tab2016 <- phis_2016 %>%
+  select(starts_with("mh_"), dependence) %>%
+  colSums %>% 
+  data.frame(count2016 = .) %>% mutate(perc = round(count2016 / nrow(phis_2016), 3)) %>%
+  arrange(desc(count2016)) %>% head(7)
+
+phis_2021 <- phis %>% filter(ADMIT_YEAR==2021)
+tab2021 <- phis_2021 %>%
+  select(starts_with("mh_"), dependence) %>%
+  colSums %>% 
+  data.frame(count2021 = .) %>% mutate(perc = round(count2021 / nrow(phis_2021), 3)) %>%
+  arrange(desc(count2021)) %>% head(7)
+
+cbind(taball, tab2016[c(1,2,4,3,5:7),], tab2021[c(1,2,3,5,4,6,7),])
+  
+```
+
+
+
+**End of report. Code appendix begins on the next page.**
+
+\pagebreak
+
+## Code Appendix
+
+```{r allcode, ref.label = knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
+
+**End of document.**

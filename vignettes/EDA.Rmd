@@ -1,0 +1,43 @@
+---
+title: "PHIS Preliminary EDA"
+subtitle: "Department of Biostatistics @ University of Washington"
+author:
+- Alejandro Hernandez
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=F}
+# clear environment
+rm(list=ls())
+# setup options
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+options(knitr.kable.NA = '-', digits = 2)
+```
+
+```{r load-libraries-data}
+# load relevant packages
+# library(dplyr)      # data frame manipulation
+# library(ggplot2)
+# library(gtsummary)  # table summaries
+# library(dagR)       # DAG simulation
+# library(broom)        # model coefficient table
+# library(knitr)      # pretty tables
+# library(rigr)         # regression
+
+# load data
+PHIS <- read.csv("../data/mh_subs_1kextract_uw.csv")
+# names(PHIS)
+# dim(PHIS)
+
+head(PHIS)
+```
+```{r region}
+PHIS %>% select(RACE_ETHNICITY) %>% table
+
+PHIS %>% select(use) %>% table()
+
+PHIS %>% select(NUM_SUBSTANCES) %>% table()
+```
+
+**End of vignette.**

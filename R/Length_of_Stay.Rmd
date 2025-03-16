@@ -1,0 +1,209 @@
+---
+title: "LOS_Simplified"
+author: "Shizhao_Yang"
+date: "2025-02-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## LOS
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(glmmTMB)
+# 1. Read Data
+mh <- read.csv("mh_subs_uw.csv", 
+               header = TRUE, 
+               sep = ",", 
+               stringsAsFactors = FALSE)
+
+# 2. Remove rows where RACE_ETHNICITY is "Unknown"
+mh <- mh[mh$RACE_ETHNICITY != "Unknown", ]
+
+# 3. Create a simplified race variable for quick checks (optional)
+mh$Race_simplified <- ifelse(
+  mh$RACE_ETHNICITY %in% c("Non-Hispanic White", "Black or African American", "Hispanic"),
+  mh$RACE_ETHNICITY,
+  "Other"
+)
+
+# Check the result (optional)
+table(mh$Race_simplified)
+
+# 4. Remove records where hospital-recorded sex is "Unknown"
+mh_cleaned <- subset(mh, HOSP_RECORDED_SEX != "Unknown")
+
+# 5. Convert ADMIT_DATE to Date format 
+# (change '%Y-%m-%d' if your dates are in a different format)
+mh_cleaned$ADMIT_DATE <- as.Date(mh_cleaned$ADMIT_DATE, format = "%Y-%m-%d")
+
+# 6. Create a new race variable that collapses categories to White, Black, Hispanic, Other
+mh_cleaned <- mh_cleaned %>%
+  mutate(RACE_cat = case_when(
+    RACE_ETHNICITY == "Non-Hispanic White"       ~ "White",
+    RACE_ETHNICITY == "Black or African American"~ "Black",
+    RACE_ETHNICITY == "Hispanic"                 ~ "Hispanic",
+    TRUE                                         ~ "Other"   # catch-all for everything else
+  ))
+
+# 7. Create a year_month variable and a time index
+mh_cleaned$year_month <- format(mh_cleaned$ADMIT_DATE, "%Y-%m")
+unique_months <- sort(unique(mh_cleaned$year_month))
+mh_cleaned$time_index <- match(mh_cleaned$year_month, unique_months)
+
+# 8. Create a binary indicator for mental-health status (MH_ANY == "One or more")
+mh_cleaned$MH_ANY_num <- ifelse(mh_cleaned$MH_ANY == "One or more", 1, 0)
+
+# 9. (Optional) Inspect your final cleaned dataset
+head(mh_cleaned)
+```
+
+
+```{r}
+# 1) Filter out LOS <= 0
+mh_glmm <- mh_cleaned %>%
+  filter(LENGTH_OF_STAY_DAYS > 0)
+
+# 2) Remove incomplete rows if needed
+mh_glmm <- mh_glmm %>%
+  filter(
+    ADMIT_DATE <= as.Date("2021-12-01"),
+    !is.na(MH_ANY_num),
+    !is.na(AGE_YRS),
+    !is.na(RACE_cat),
+    !is.na(POLYSUBSTANCE),
+    !is.na(HOSPITAL),
+    !is.na(LENGTH_OF_STAY_DAYS)
+  )
+
+# Make sure RACE_cat is a factor
+mh_glmm$RACE_cat <- factor(mh_glmm$RACE_cat)
+
+# Relevel RACE_cat so that "White" is the reference
+mh_glmm$RACE_cat <- relevel(mh_glmm$RACE_cat, ref = "White")
+
+# Inspect
+summary(mh_glmm$LENGTH_OF_STAY_DAYS)
+```
+
+
+```{r}
+# Suppose we already had a sorted list of unique months:
+unique_months <- sort(unique(format(mh_glmm$ADMIT_DATE, "%Y-%m")))
+
+mh_glmm$time_index <- match(
+  format(mh_glmm$ADMIT_DATE, "%Y-%m"), 
+  unique_months
+)
+
+```
+
+
+```{r}
+model_gamma_glmm_timeIndex_interaction <- glmmTMB(
+  LENGTH_OF_STAY_DAYS ~ MH_ANY_num * time_index + AGE_YRS + RACE_cat + POLYSUBSTANCE + HOSP_RECORDED_SEX +
+    (1 | HOSPITAL),
+  family = Gamma(link = "log"),
+  data = mh_glmm
+)
+
+summary(model_gamma_glmm_timeIndex_interaction)
+```
+
+
+
+
+```{r}
+# Load necessary libraries
+library(ggeffects)
+library(ggplot2)
+library(lubridate)
+
+# Suppose your study starts in January 2016 (update this if needed)
+start_date <- as.Date("2016-01-01")  
+end_date <- as.Date("2021-11-30")
+# Generate predictions
+pred_data <- ggpredict(
+  model_gamma_glmm_timeIndex_interaction,
+  terms = c("time_index", "MH_ANY_num")  # or c("MH_ANY_num", "time_index")
+)
+
+# Convert time_index to real dates (assuming each index represents a month)
+pred_data$x <- start_date %m+% months(pred_data$x - 1)  # Adjust index to real months
+pred_data <- pred_data %>% filter(x <= end_date)
+```
+
+```{r}
+p <- ggplot(pred_data, aes(x = x, y = predicted, color = group)) +
+  geom_line(size = 1) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), 
+              alpha = 0.2, color = NA) +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "6 months") +
+  labs(
+    x = "Time (Month-Year)",
+    y = "Expected LOS (Days)",
+    color = "MH Comorbidity",
+    fill  = "MH Comorbidity",
+    title = "Estimated LOS by Month and Mental Health Status"
+  ) +
+  # Rename the legend labels
+  scale_color_discrete(labels = c("0" = "Not mental health",
+                                  "1" = "Any mental health")) +
+  scale_fill_discrete(labels = c("0" = "Not mental health",
+                                 "1" = "Any mental health")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+p
+```
+
+```{r}
+ggsave(
+  filename = "LOS.pdf",  # your desired file name
+  plot     = p,
+  device   = cairo_pdf,     # ensures anti-aliasing and high-quality text
+  width    = 8,             # in inches, adjust as needed
+  height   = 6,             # in inches, adjust as needed
+  dpi      = 600            # mostly relevant for embedded rasters; still good practice
+)
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+

@@ -1,0 +1,312 @@
+---
+title: "Trends of comorbid mental health conditions, 2019-2021"
+subtitle: "Seattle Children's Hospital Capstone Group"
+author:
+- Alejandro Hernandez
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=F}
+# clear environment
+rm(list=ls())
+# setup options
+knitr::opts_chunk$set(results='hide', warning=FALSE, message=FALSE)
+options(knitr.kable.NA = '-', digits = 2)
+```
+
+```{r load}
+# Load relevant packages
+library(tidyverse)  # whole bunch of useful packages
+library(knitr)      # pretty print
+library(lubridate)  # date formatting
+library(ggplot2); theme_set(theme_bw())    # data visualization
+library(ggridges)
+
+
+# Load relevant local scripts
+source("../R/preprocessing.R")  # Pre-processing
+source("../R/describe-data.R")  # Describing overall details of PHIS data
+source("../R/summarize-growth.R")  # Summarize and present trends
+source("../R/model-growth.R")
+source("../R/compare-growth.R")
+
+# Load data
+phis_raw <- read_csv(file = "../data/mh_subs_uw.csv")  # Ensure this is the right directory
+nrow(phis_raw)  # 106,793 rows
+names(phis_raw)
+
+# Preprocess data
+phis <- preprocessing(phis_raw)
+names(phis)
+
+phis_mh <- filter(phis, MH_ANY==1)
+```
+
+```{r}
+## Hospital assigned sex
+ggbar_sex <- phis_mh %>% filter(HOSP_RECORDED_SEX != "Unknown") %>%
+  select(characteristic=HOSP_RECORDED_SEX) %>%
+  table %>% 
+  t %>% data.frame %>% .[-1] %>%
+  arrange(desc(Freq)) %>% mutate(Perc = round(100*Freq / nrow(phis_mh))) %>%
+  ggplot(aes(y=Perc, x=characteristic)) + 
+    geom_col() + ylim(c(0,60)) +
+    geom_text(aes(label=Perc), col="white", size=6, vjust=1.5) + 
+    labs(x="", y="")
+ggbar_sex # L:, W:
+
+## Race/Ethnicity
+ggbar_race <- phis_mh %>% 
+  mutate(RACE_ETHNICITY = case_when(
+    RACE_ETHNICITY == "Non-Hispanic White" ~ "NH White",
+    RACE_ETHNICITY == "Black or African American" ~ "NH Black",
+    RACE_ETHNICITY == "Hispanic" ~ "Hispanic",
+    TRUE ~ "Other"
+  )) %>%
+  select(characteristic=RACE_ETHNICITY) %>%
+  table %>% 
+  t %>% data.frame %>% .[-1] %>%
+  arrange(desc(Freq)) %>% mutate(Perc = round(100*Freq / nrow(phis_mh))) %>%
+  ggplot(aes(y=Perc, x=characteristic)) + 
+    geom_col() + ylim(c(0,60)) +
+    geom_text(aes(label=Perc), col="white", size=6, vjust=1.5) + 
+    labs(x="", y="")
+ggbar_race # L:, W:
+
+ggbar_age <- phis_mh %>% select(characteristic=AGE_GRP) %>% 
+  table %>% 
+  t %>% data.frame %>% .[-1] %>%
+  arrange(desc(Freq)) %>% mutate(Perc = round(100*Freq / nrow(phis_mh))) %>% 
+  ggplot(aes(y=Perc, x=characteristic)) + 
+  geom_col() + ylim(c(0,60)) +
+  geom_text(aes(label=Perc), col="white", size=6, vjust=1.5) + 
+  labs(x="", y="")
+ggbar_age # L:, W:
+```
+
+
+
+```{r}
+growth_figures <- function(results) {
+  growths <- list(names=names(results))
+  for (result in results) {
+    growth <- 100*result$tables$counts_by_year$percentgrowth
+    growths <- c(growths, list(growth=growth))
+  }
+  names(growths) <- c("names", names(results))
+  growths
+  
+  growths_df <- data.frame(growths[-1]) %>% t %>% data.frame
+  colnames(growths_df) <- paste0("growth", 2016:2021)
+  growths_df$characteristic <- rownames(growths_df)
+  growths_df <- growths_df %>% select(characteristic, everything())
+  rownames(growths_df) <- NULL
+  growths_df
+  
+  gg_barplot <- ggplot(growths_df, aes(x=characteristic , y=growth2021)) +
+    geom_col() +
+    geom_text(aes(label=round(growth2021)), col="white", size=6, vjust=1.5) +
+    labs(x="", y="")
+  
+  growths_df_long <- growths_df %>% 
+  pivot_longer(contains("growth"), names_prefix="growth", names_to="time") %>%
+  mutate(time = as.numeric(time))
+  growths_df_long
+  
+  growths_df_long$characteristic %>% unique %>% sort
+  ggcolors <- c("darkred", "brown2", "orange", "forestgreen", "grey", 
+              "deepskyblue", "darkblue")
+
+  gg_lineplot <- ggplot(growths_df_long, aes(x=time, y=value, 
+                                             color=characteristic)) +
+    # Visualize trend
+    geom_line(lwd=0.8) +
+    # Modify legend
+    scale_color_manual(values=ggcolors)
+  
+  plots <- list(barplot=gg_barplot, lineplot=gg_lineplot)
+  tables <- list(growths_df=growths_df, growths_df_long=growths_df_long)
+  
+  return(list(tables=tables, plots=plots))
+}
+```
+
+```{r}
+
+## Race
+res_nhwhite <- filter(phis_mh, RACE_ETHNICITY=="Non-Hispanic White") %>%
+  summarize_growth()
+res_nhblack <- filter(phis_mh, RACE_ETHNICITY=="Black or African American") %>%
+  summarize_growth()
+res_hispanic <- filter(phis_mh, RACE_ETHNICITY=="Hispanic") %>%
+  summarize_growth()
+res_other <- filter(phis_mh, !RACE_ETHNICITY %in% c("Non-Hispanic White", 
+                                               "Black or African American", 
+                                               "Hispanic")) %>%
+  summarize_growth()
+
+results_race = list(nhwhite=res_nhwhite,
+               nhblack=res_nhblack,
+               hispanic=res_hispanic,
+               other=res_other)
+
+figures_race <- growth_figures(results_race)
+ggbar_race <- figures_race$plots$barplot +
+  # Modify axes
+  ylim(c(0,70)) +
+  labs(x="", y="")
+ggbar_race
+```
+```{r}
+## Sex
+res_female <- filter(phis_mh, HOSP_RECORDED_SEX=="Female") %>% summarize_growth()
+res_male <- filter(phis_mh, HOSP_RECORDED_SEX=="Male") %>% summarize_growth()
+
+results_sex = list(female=res_female, male=res_male)
+
+figures_sex <- growth_figures(results_sex)
+ggbar_sex <- figures_sex$plots$barplot +
+  # Modify axes
+  ylim(c(0,70)) +
+  labs(x="", y="")
+ggbar_sex
+```
+```{r}
+## Age
+res_age1 <- filter(phis_mh, AGE_GRP=="12-15") %>% summarize_growth()
+res_age2 <- filter(phis_mh, AGE_GRP=="16-17") %>% summarize_growth()
+res_age3 <- filter(phis_mh, AGE_GRP=="18-21") %>% summarize_growth()
+
+results_age = list(age1=res_age1, age2=res_age2, age3=res_age3)
+
+figures_age <- growth_figures(results_age)
+ggbar_age <- figures_age$plots$barplot +
+  # Modify axes
+  ylim(c(0,70)) +
+  labs(x="", y="")
+ggbar_age
+```
+
+
+
+
+```{r}
+phis <- phis %>%
+  mutate(months_from_baseline = (ADMIT_YEAR - 2016) * 12 + ADMIT_MONTH)
+
+counts_by_month <- phis %>%
+  group_by(mh_any=as.factor(MH_ANY), month=months_from_baseline) %>% 
+  summarize(count = n())
+
+ggplot(counts_by_month, aes(y=count, x=month, color=mh_any, fill=mh_any)) +
+    # Add line for onset of COVID
+    geom_vline(xintercept=4*12+3, color="black", lwd=0.5) +
+    # Visualize trends in count
+    geom_line() +
+    geom_smooth() +
+    # Label axes
+    labs(x="Month of admission", y="Count") +
+    scale_x_continuous(breaks = seq(1,72,12), labels = paste0(2016:2021,"-Jan"))
+    # Add legend
+    # theme(legend.position="inside", legend.position.inside=c(.15, .8))
+    # scale_color_manual(values=c("darkred", "orange"))
+
+```
+
+```{r}
+counts_by_year <- phis %>%
+  group_by(mh_any=as.factor(MH_ANY), year=ADMIT_YEAR) %>% 
+  summarize(count = n()) 
+
+reference_counts <- counts_by_year %>% filter(year==2016) %>% select(count)
+change_by_year <- counts_by_year %>%
+  mutate(percent_change = ifelse(mh_any==0, 
+            (count-reference_counts$count[1])/reference_counts$count[1],
+            (count-reference_counts$count[2])/reference_counts$count[2]
+            )
+         )
+
+ggplot(change_by_year, aes(y=percent_change, x=year, color=mh_any, fill=mh_any)) +
+    # Add line for onset of COVID
+    geom_vline(xintercept=2020, color="black", lwd=0.5) +
+    # Visualize trends in count
+    geom_line(lwd=1) +
+    geom_point(size=2) +
+    # Modify axes
+    labs(x="Year of admission", y="Percent Change from 2016") +
+    scale_x_continuous(breaks = 2016:2021) + 
+    scale_y_continuous(limits = c(0,0.6), position = "right") +
+    # Modify legend
+    labs(color = "Characteristic", fill = "Characteristic") +
+    scale_color_manual(values = c("1" = "#F8766D", "0" = "#00BFC4"),
+                       labels = c("Any mental health", "Not mental health"))
+
+    # Add legend
+    # theme(legend.position="inside", legend.position.inside=c(.15, .8))
+    # scale_color_manual(values=c("darkred", "orange"))
+```
+
+```{r}
+res_depres <- summarize_growth(filter(phis, mh_7 == 1))
+res_suicid <- summarize_growth(filter(phis, mh_29 == 1))
+res_depend <- summarize_growth(filter(phis, dependence == 1))
+res_anxiet <- summarize_growth(filter(phis, mh_3 == 1))
+res_adhd <- summarize_growth(filter(phis, mh_2 == 1))
+res_trauma <- summarize_growth(filter(phis, mh_30 == 1))
+res_none <- summarize_growth(filter(phis, MH_ANY == 0))
+
+results = list(depres=res_depres,
+               suicid=res_suicid,
+               depend=res_depend,
+               anxiet=res_anxiet,
+               adhd=res_adhd,
+               trauma=res_trauma,
+               none=res_none)
+
+growths <- list(names=names(results))
+for (result in results) {
+  growth <- 100*result$tables$counts_by_year$percentgrowth
+  growths <- c(growths, list(growth=growth))
+}
+names(growths) <- c("names", names(results))
+growths
+
+growths_df <- data.frame(growths[-1]) %>% t %>% data.frame
+colnames(growths_df) <- paste0("growth", 2016:2021)
+growths_df$condition <- rownames(growths_df)
+growths_df <- growths_df %>% select(condition, everything())
+rownames(growths_df) <- NULL
+growths_df
+
+growths_df_long <- growths_df %>% 
+  pivot_longer(contains("growth"), names_prefix="growth", names_to="time") %>%
+  mutate(time = as.numeric(time))
+growths_df_long
+```
+
+
+```{r}
+growths_df_long$condition %>% unique %>% sort
+ggcolors <- c("darkred", "brown2", "orange", "forestgreen", "grey", 
+              "deepskyblue", "darkblue")
+
+gg <- ggplot(growths_df_long, aes(x=time, y=value, color=condition)) +
+  # Visualize trend
+  geom_line(lwd=0.8) +
+  # Modify legend
+  scale_color_manual(values=ggcolors)
+gg
+
+
+gg +
+  # Add line for onset of COVID
+  geom_vline(xintercept=2020, color="black", lwd=0.5) +
+  # Visualize trends in percent growth
+  geom_point() +
+  # Label axes
+  labs(x="Year of admission", y="Percent change from 2016") +
+  scale_y_continuous(breaks = seq(0,120,by=20))
+
+```
+

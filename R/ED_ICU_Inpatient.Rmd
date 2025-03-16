@@ -1,0 +1,247 @@
+---
+title: "Capstone"
+author: "Shizhao_Yang"
+date: "2025-01-22"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Loading and Processing 
+
+```{r}
+
+######################################
+# 1. Load and Clean the Data
+######################################
+
+library(dplyr)
+library(tidyverse)
+
+# Read CSV
+mh <- read.csv("mh_subs_uw.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+
+# Remove rows where RACE_ETHNICITY is "Unknown"
+mh <- mh[mh$RACE_ETHNICITY != "Unknown", ]
+
+# Create new column Race_simplified
+mh$Race_simplified <- ifelse(mh$RACE_ETHNICITY %in% c("Non-Hispanic White", "Black or African American", "Hispanic"),
+                             mh$RACE_ETHNICITY, 
+                             "Other")
+
+# Check the result
+table(mh$Race_simplified)
+
+# Remove records where hospital-recorded sex is "Unknown"
+mh_cleaned <- subset(mh, HOSP_RECORDED_SEX != "Unknown")
+
+# Convert ADMIT_DATE to Date format (adjust 'format' if needed)
+mh_cleaned$ADMIT_DATE <- as.Date(mh_cleaned$ADMIT_DATE, format = "%Y-%m-%d")
+
+# Remove records with ADMIT_DATE after 2021-10-01
+cutoff_date <- as.Date("2021-10-01")
+mh_cleaned <- subset(mh_cleaned, ADMIT_DATE <= cutoff_date)
+```
+
+## Aggregate Monthly Data
+
+```{r}
+######################################
+# 2. Aggregate Monthly Data
+######################################
+
+mh_cleaned <- mh_cleaned %>%
+  mutate(RACE_cat = case_when(
+    RACE_ETHNICITY == "Non-Hispanic White"   ~ "White",
+    RACE_ETHNICITY == "Black or African American"   ~ "Black",
+    RACE_ETHNICITY == "Hispanic"   ~ "Hispanic",
+    TRUE                 ~ "Other"   # catch-all for everything else
+  ))
+
+# Create a year-month variable (character) to group by month
+mh_cleaned$year_month <- format(mh_cleaned$ADMIT_DATE, "%Y-%m")
+unique_months <- sort(unique(mh_cleaned$year_month))
+mh_cleaned$time_index <- match(mh_cleaned$year_month, unique_months)
+mh_cleaned$MH_ANY_num <- ifelse(mh_cleaned$MH_ANY == "One or more", 1, 0)
+```
+
+### New df_monthly that absorbbing race
+```{r}
+# Create a vector of unique months for computing a time index
+unique_months <- sort(unique(format(mh_cleaned$ADMIT_DATE, "%Y-%m")))
+
+# Construct the new monthly aggregated dataframe
+df_monthly_new <- mh_cleaned %>%
+  # Create the 'year_month' variable and a matching 'time_index'
+  mutate(year_month = format(ADMIT_DATE, "%Y-%m"),
+         time_index = match(year_month, unique_months)) %>%
+  # Group by hospital, month, time index, and mental health status
+  group_by(HOSPITAL, year_month, time_index, MH_ANY_num) %>%
+  summarise(
+    # Aggregate counts and averages as before:
+    ED_Visits    = sum(ED_FLAG, na.rm = TRUE),
+    ICU_Visits   = sum(ICU_FLAG, na.rm = TRUE),
+    Inpt_Visits  = sum(INPATIENT_FLAG, na.rm = TRUE),
+    total_visits = n(),
+    mean_age     = mean(AGE_YRS, na.rm = TRUE),
+    polysub_prop = mean(POLYSUBSTANCE, na.rm = TRUE),
+    prop_female  = mean(HOSP_RECORDED_SEX == "Female", na.rm = TRUE),
+    mean_charges = mean(TOTAL_CHARGES, na.rm = TRUE),
+    # Now calculate race proportions within each group:
+    white_prop    = mean(RACE_cat == "White", na.rm = TRUE),
+    black_prop    = mean(RACE_cat == "Black", na.rm = TRUE),
+    hispanic_prop = mean(RACE_cat == "Hispanic", na.rm = TRUE),
+    other_prop    = mean(RACE_cat == "Other", na.rm = TRUE),
+    .groups      = "drop"
+  )
+  
+# Take a look at the new dataframe
+head(df_monthly_new)
+```
+#### ED
+
+```{r}
+
+library(dplyr)
+library(glmmTMB)
+model_nb_glmm_ED_new <- glmmTMB(
+  ED_Visits ~ MH_ANY_num * time_index + mean_age + prop_female +
+              polysub_prop + other_prop + black_prop + hispanic_prop +
+              (1 | HOSPITAL),
+  family = nbinom2(link = "log"),  # Negative binomial family with log link
+  data = df_monthly_new
+)
+summary(model_nb_glmm_ED_new)
+```
+
+#### ICU 
+```{r}
+model_nb_glmm_ICU_new <- glmmTMB(
+  ICU_Visits ~ MH_ANY_num * time_index + mean_age + prop_female +
+              polysub_prop + other_prop + black_prop + hispanic_prop +
+              (1 | HOSPITAL),
+  family = nbinom2(link = "log"),  # Negative binomial family with log link
+  data = df_monthly_new
+)
+
+# Display the summary of the model
+summary(model_nb_glmm_ICU_new)
+```
+#### Inpatient 
+```{r}
+model_nb_glmm_Inpt_new <- glmmTMB(
+  Inpt_Visits ~ MH_ANY_num * time_index + mean_age + prop_female +
+              polysub_prop + other_prop + black_prop + hispanic_prop +
+              (1 | HOSPITAL),
+  family = nbinom2(link = "log"),  # Negative binomial family with log link
+  data = df_monthly_new
+)
+
+# Display the summary of the model
+summary(model_nb_glmm_Inpt_new)
+```
+
+
+
+```{r}
+
+library(ggeffects)
+library(lubridate)   # for date manipulation
+library(dplyr)
+library(ggplot2)
+
+# 1) Generate predictions for each outcome (ED, ICU, Inpatient) with interaction
+pred_ed <- ggpredict(
+  model_nb_glmm_ED_new,
+  terms = c("time_index", "MH_ANY_num")
+)
+pred_ed$outcome <- "ED Visits"
+
+pred_icu <- ggpredict(
+  model_nb_glmm_ICU_new,
+  terms = c("time_index", "MH_ANY_num")
+)
+pred_icu$outcome <- "ICU Visits"
+
+pred_inpt <- ggpredict(
+  model_nb_glmm_Inpt_new,
+  terms = c("time_index", "MH_ANY_num")
+)
+pred_inpt$outcome <- "Inpatient Visits"
+
+# 2) Combine into one data frame
+all_pred <- bind_rows(pred_ed, pred_icu, pred_inpt) %>%
+  rename(MH_Status = group)
+
+# 3) Convert time_index -> actual Date
+start_date <- as.Date("2016-01-01")
+end_date <- as.Date("2022-01-01")  # Define the cutoff date
+
+all_pred$x <- start_date %m+% months(all_pred$x - 1)  # Convert index to real months
+
+# 4) Remove predictions beyond January 2022
+all_pred <- all_pred %>% filter(x <= end_date)
+```
+
+```{r}
+p <- ggplot(all_pred, aes(x = x, y = predicted, color = MH_Status, fill = MH_Status)) +
+  geom_line(size = 1) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2, color = NA) +
+  facet_wrap(~ outcome, ncol = 1, scales = "free_y") +  # stack plots vertically
+  scale_x_date(date_labels = "%b %Y", date_breaks = "6 months") +
+  labs(
+    x = "Month",
+    y = "Expected Count",
+    color = "MH Comorbidity",
+    fill  = "MH Comorbidity",
+    title = "Estimated ED, ICU, and Inpatient Visits Over Time"
+  ) +
+  scale_color_discrete(labels = c("0" = "Not mental health",
+                                  "1" = "Any mental health")) +
+  scale_fill_discrete(labels = c("0" = "Not mental health",
+                                 "1" = "Any mental health")) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+```{r}
+p
+```
+
+```{r}
+ggsave(
+  filename = "ED_ICU_Inpt.pdf",  # your desired file name
+  plot     = p,
+  device   = cairo_pdf,     # ensures anti-aliasing and high-quality text
+  width    = 8,             # in inches, adjust as needed
+  height   = 6,             # in inches, adjust as needed
+  dpi      = 600            # mostly relevant for embedded rasters; still good practice
+)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
